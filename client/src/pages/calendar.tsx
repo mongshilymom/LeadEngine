@@ -217,7 +217,7 @@ export default function Calendar() {
                           {leadInfo.origin && (
                             <div className="flex items-center space-x-2">
                               <MapPin className="h-4 w-4" />
-                              <span>{(leadInfo.origin as any).address || "Location not specified"}</span>
+                              <span>{String((leadInfo.origin as any)?.address || "Location not specified")}</span>
                             </div>
                           )}
                           
@@ -252,7 +252,7 @@ export default function Calendar() {
             </CardHeader>
             <CardContent>
               <div className="space-y-3">
-                {slots?.map((slot: any, index: number) => (
+                {Array.isArray(slots) && slots.map((slot: any, index: number) => (
                   <div 
                     key={index} 
                     className={`flex items-center justify-between p-3 rounded-lg border ${

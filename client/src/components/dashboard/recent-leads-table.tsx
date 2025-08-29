@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import type { Lead, Booking } from "@shared/schema";
 import { api } from "@/lib/api";
 
@@ -28,7 +29,7 @@ export default function RecentLeadsTable() {
   const handleConfirmBooking = async (leadId: string) => {
     try {
       const booking = bookings?.find(b => b.leadId === leadId);
-      if (booking) {
+      if (booking?.id) {
         await api.confirmBooking(booking.id);
         window.location.reload();
       }
@@ -95,7 +96,7 @@ export default function RecentLeadsTable() {
     );
   };
 
-  const getInitials = (name?: string) => {
+  const getInitials = (name?: string | null) => {
     if (!name) return "??";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   };

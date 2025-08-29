@@ -205,8 +205,16 @@ export class MemStorage implements IStorage {
   }
 
   async createPricingRule(rule: InsertPricingRule): Promise<PricingRule> {
-    this.pricingRules.set(rule.merchantId, rule);
-    return rule;
+    const pricingRule: PricingRule = {
+      ...rule,
+      baseFee: rule.baseFee ?? 200000,
+      perKm: rule.perKm ?? 2000,
+      perFloor: rule.perFloor ?? 10000,
+      volumeCoeff: rule.volumeCoeff ?? { "S": 1, "M": 1.15, "L": 1.35 },
+      surgeRules: rule.surgeRules ?? {}
+    };
+    this.pricingRules.set(rule.merchantId, pricingRule);
+    return pricingRule;
   }
 
   async getLeads(merchantId: string): Promise<Lead[]> {
@@ -221,7 +229,21 @@ export class MemStorage implements IStorage {
 
   async createLead(lead: InsertLead): Promise<Lead> {
     const id = randomUUID();
-    const newLead: Lead = { ...lead, id, createdAt: new Date() };
+    const newLead: Lead = { 
+      ...lead, 
+      id, 
+      createdAt: new Date(),
+      name: lead.name ?? null,
+      phone: lead.phone ?? null,
+      origin: lead.origin ?? null,
+      dest: lead.dest ?? null,
+      floorFrom: lead.floorFrom ?? null,
+      floorTo: lead.floorTo ?? null,
+      elevFrom: lead.elevFrom ?? null,
+      elevTo: lead.elevTo ?? null,
+      volume: lead.volume ?? null,
+      preferredTs: lead.preferredTs ?? null
+    };
     this.leads.set(id, newLead);
     return newLead;
   }
@@ -254,7 +276,19 @@ export class MemStorage implements IStorage {
 
   async createBooking(booking: InsertBooking): Promise<Booking> {
     const id = randomUUID();
-    const newBooking: Booking = { ...booking, id, createdAt: new Date() };
+    const newBooking: Booking = { 
+      ...booking, 
+      id, 
+      createdAt: new Date(),
+      status: booking.status ?? "tentative",
+      leadId: booking.leadId ?? null,
+      priceMin: booking.priceMin ?? null,
+      priceMax: booking.priceMax ?? null,
+      slotStart: booking.slotStart ?? null,
+      slotEnd: booking.slotEnd ?? null,
+      depositAmount: booking.depositAmount ?? null,
+      depositTxId: booking.depositTxId ?? null
+    };
     this.bookings.set(id, newBooking);
     return newBooking;
   }
@@ -279,7 +313,14 @@ export class MemStorage implements IStorage {
 
   async createPayment(payment: InsertPayment): Promise<Payment> {
     const id = randomUUID();
-    const newPayment: Payment = { ...payment, id, createdAt: new Date() };
+    const newPayment: Payment = { 
+      ...payment, 
+      id, 
+      createdAt: new Date(),
+      status: payment.status ?? "pending",
+      tossPaymentKey: payment.tossPaymentKey ?? null,
+      tossOrderId: payment.tossOrderId ?? null
+    };
     this.payments.set(id, newPayment);
     return newPayment;
   }
@@ -302,7 +343,13 @@ export class MemStorage implements IStorage {
 
   async createActivity(activity: InsertActivity): Promise<Activity> {
     const id = randomUUID();
-    const newActivity: Activity = { ...activity, id, createdAt: new Date() };
+    const newActivity: Activity = { 
+      ...activity, 
+      id, 
+      createdAt: new Date(),
+      entityId: activity.entityId ?? null,
+      entityType: activity.entityType ?? null
+    };
     this.activities.set(id, newActivity);
     return newActivity;
   }

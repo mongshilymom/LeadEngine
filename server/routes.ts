@@ -7,7 +7,7 @@ import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Get default merchant (for demo purposes)
-  const DEFAULT_MERCHANT_ID = Array.from((storage as any).merchants.keys())[0];
+  const DEFAULT_MERCHANT_ID = Array.from((storage as any).merchants.keys())[0] as string;
 
   // Lead management routes
   app.get("/api/leads", async (req, res) => {
@@ -231,10 +231,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.log("Payment callback received:", { paymentKey, orderId, amount });
       
       // Update payment status
-      const payments = Array.from((storage as any).payments.values());
-      const payment = payments.find(p => p.tossOrderId === orderId);
+      const payments = Array.from((storage as any).payments.values()) as any[];
+      const payment = payments.find((p: any) => p.tossOrderId === orderId);
       
-      if (payment) {
+      if (payment?.id) {
         await storage.updatePayment(payment.id, {
           status: "completed",
           tossPaymentKey: paymentKey,
