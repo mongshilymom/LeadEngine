@@ -1,0 +1,255 @@
+📂 파일 트리
+text
+leadengine/
+├── app/
+│   └── api/
+│       ├── intake/route.ts
+│       ├── quote/route.ts
+│       ├── slots/route.ts
+│       ├── booking/route.ts
+│       ├── payment/callback/route.ts
+│       ├── kakao/webhook/route.ts
+│       └── inngest/route.ts
+├── lib/
+│   ├── supabase.ts
+│   ├── pricing.ts
+│   ├── security.ts
+│   └── inngest.ts
+├── functions/
+│   ├── leadPipeline.ts
+│   └── onPayment.ts
+├── db/
+│   └── migrations/
+│       ├── 001_schema.sql
+│       └── 002_rls.sql
+├── .env.example
+├── package.json
+└── tsconfig.json
+1) package.json (주요 의존성)
+json
+{
+  "name": "leadengine",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
+  },
+  "dependencies": {
+    "next": "14.2.3",
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "@supabase/supabase-js": "^2.39.8",
+    "inngest": "^3.17.2",
+    "zod": "^3.23.4",
+    "uuid": "^9.0.1",
+    "date-fns": "^3.6.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "@types/node": "^20.12.12",
+    "@types/react": "^18.2.36",
+    "@types/uuid": "^9.0.7"
+  }
+}
+2) .env.example
+text
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+SUPABASE_URL=
+SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE=
+
+PG_WEBHOOK_SECRET=replace_with_random_32b
+
+GOOGLE_SERVICE_ACCOUNT_JSON={"type":"service_account",...}
+GOOGLE_CALENDAR_ID=primary
+
+TOSS_SECRET_KEY=test_sk_xxx
+KAKAO_VERIFY_TOKEN=some_random_string
+TZ=Asia/Seoul
+3) DB 스키마 (db/migrations/001_schema.sql)
+sql
+create table merchants(
+  id uuid primary key default gen_random_uuid(),
+  name text not null,
+  created_at timestamptz default now()
+);
+
+create table pricing_rules(
+  merchant_id uuid references merchants(id),
+  base_fee int not null default 200000,
+  per_km int not null default 2000,
+  per_floor int not null default 10000,
+  volume_coeff jsonb not null default '{"S":1,"M":1.15,"L":1.35}',
+  surge_rules jsonb not null default '{}' 
+);
+
+create table leads(
+  id uuid primary key default gen_random_uuid(),
+  merchant_id uuid references merchants(id) not null,
+  channel text not null,
+  name text,
+  phone text,
+  origin jsonb,
+  dest jsonb,
+  floor_from int,
+  floor_to int,
+  elev_from bool,
+  elev_to bool,
+  volume text,
+  preferred_ts timestamptz,
+  created_at timestamptz default now()
+);
+
+create table bookings(
+  id uuid primary key default gen_random_uuid(),
+  lead_id uuid references leads(id),
+  price_min int,
+  price_max int,
+  slot_start timestamptz,
+  slot_end timestamptz,
+  status text default 'tentative',
+  deposit_amount int,
+  deposit_tx_id text,
+  created_at timestamptz default now()
+);
+4) Supabase Client (lib/supabase.ts)
+ts
+import { createClient } from "@supabase/supabase-js";
+
+export const sbAdmin = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_SERVICE_ROLE!,
+  { auth: { persistSession: false } }
+);
+
+export const sbAnon = createClient(
+  process.env.SUPABASE_URL!,
+  process.env.SUPABASE_ANON_KEY!,
+  { auth: { persistSession: false } }
+);
+5) Pricing 룰 (lib/pricing.ts)
+ts
+type Rule = {
+  base_fee: number;
+  per_km: number;
+  per_floor: number;
+  volume_coeff: Record<string, number>;
+};
+
+type LeadLite = {
+  dist_km: number;
+  floors: number;
+  volume: "S" | "M" | "L";
+  surge?: number;
+};
+
+export function quoteV1(rule: Rule, lead: LeadLite) {
+  const surge = lead.surge ?? 1;
+  const vol = rule.volume_coeff[lead.volume] ?? 1;
+  const price =
+    (rule.base_fee +
+      rule.dist_km * rule.per_km +
+      lead.floors * rule.per_floor) *
+    vol *
+    surge;
+
+  return { min: Math.round(price * 0.9), max: Math.round(price * 1.15) };
+}
+6) Inngest Client (lib/inngest.ts)
+ts
+import { Inngest } from "inngest";
+
+export const inngest = new Inngest({ name: "LeadEngine" });
+7) API 라우트 예시
+app/api/intake/route.ts
+
+ts
+import { NextRequest, NextResponse } from "next/server";
+import { sbAdmin } from "@/lib/supabase";
+import { v4 as uuid } from "uuid";
+import { inngest } from "@/lib/inngest";
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+  const { merchantId, channel, name, phone, origin, dest } = body;
+
+  const { data, error } = await sbAdmin
+    .from("leads")
+    .insert({
+      id: uuid(),
+      merchant_id: merchantId,
+      channel,
+      name,
+      phone,
+      origin,
+      dest,
+    })
+    .select()
+    .single();
+
+  if (error)
+    return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // 이벤트 발행
+  await inngest.send({ name: "lead.created", data: { leadId: data.id } });
+
+  return NextResponse.json({ leadId: data.id });
+}
+8) Inngest 워크플로 (functions/leadPipeline.ts)
+ts
+import { inngest } from "@/lib/inngest";
+import { sbAdmin } from "@/lib/supabase";
+import { quoteV1 } from "@/lib/pricing";
+
+export const leadPipeline = inngest.createFunction(
+  { id: "lead-pipeline" },
+  { event: "lead.created" },
+  async ({ event, step }) => {
+    const leadId = event.data.leadId as string;
+
+    const { data: lead } = await sbAdmin
+      .from("leads")
+      .select("*")
+      .eq("id", leadId)
+      .single();
+
+    if (!lead) return { error: "Not found" };
+
+    const { data: rule } = await sbAdmin
+      .from("pricing_rules")
+      .select("*")
+      .eq("merchant_id", lead.merchant_id)
+      .single();
+
+    if (!rule) return { error: "No rules" };
+
+    const floors =
+      (lead.floor_from || 0) +
+      (lead.floor_to || 0) -
+      (lead.elev_from ? 1 : 0) -
+      (lead.elev_to ? 1 : 0);
+
+    const price = quoteV1(rule, {
+      dist_km: 10,
+      floors: floors,
+      volume: (lead.volume || "M") as "S" | "M" | "L",
+    });
+
+    await sbAdmin.from("bookings").insert({
+      lead_id: leadId,
+      price_min: price.min,
+      price_max: price.max,
+      slot_start: new Date().toISOString(),
+      slot_end: new Date(Date.now() + 2 * 3600 * 1000).toISOString(),
+      status: "tentative",
+    });
+
+    return { ok: true };
+  }
+);
+✅ 이 스타터 레포를 클론해서 pnpm install && pnpm dev → .env 채우면 48시간 MVP 예약봇이 돌아간다.
+여기서 바로 결제(Toss), 캘린더(Google), 카카오 웹훅만 붙이면 실전 돌입.
