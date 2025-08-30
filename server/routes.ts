@@ -6,6 +6,9 @@ import { createLeadSchema, insertBookingSchema, insertPaymentSchema } from "@sha
 import { randomUUID } from "crypto";
 
 export async function registerRoutes(app: Express): Promise<Server> {
+  // Health check endpoint
+  app.get('/health', (_req, res) => res.json({ ok: true }));
+
   // Get default merchant (for demo purposes)
   const DEFAULT_MERCHANT_ID = Array.from((storage as any).merchants.keys())[0] as string;
 
