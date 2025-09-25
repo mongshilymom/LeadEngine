@@ -51,7 +51,7 @@ Currently uses a simplified merchant system with a default merchant ID. The arch
 
 ### Development Tools
 - **Vite**: Fast build tool and development server with HMR support
-- **Replit Integration**: Custom plugins for development environment and error handling
+- **Integration**: Custom plugins for development environment and error handling
 - **ESLint & TypeScript**: Code quality and type checking tools
 
 ### Styling and UI
