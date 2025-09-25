@@ -20,7 +20,7 @@ export default function Sidebar() {
           <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
             <i className="fas fa-bolt text-primary-foreground text-sm"></i>
           </div>
-          <h1 className="text-xl font-bold text-foreground">LeadEngine</h1>
+          <a href="https://yeyakbot.com" target="_blank" rel="noopener noreferrer" className="text-xl font-bold text-foreground">예약봇</a>
         </div>
       </div>
       
